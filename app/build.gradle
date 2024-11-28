@@ -1,9 +1,10 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
+
 android {
     signingConfigs {
     }
-    compileSdkVersion 34
+    compileSdk 34 // Cambiado de compileSdkVersion
     defaultConfig {
         minSdkVersion 21
         targetSdkVersion 34
@@ -26,6 +27,10 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+        jvmTarget = "11"
     }
 
     flavorDimensions += "store"
@@ -51,11 +56,9 @@ dependencies {
     implementation('com.journeyapps:zxing-android-embedded:3.6.0') { transitive = false }
     implementation 'com.google.zxing:core:3.3.3'
     implementation 'com.github.joshjdevl.libsodiumjni:libsodium-jni-aar:2.0.2'
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    implementation 'com.android.support:multidex:1.0.3'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.20" // Línea corregida
+    implementation 'com.android.support:multidex:1.0.3' // Línea corregida
     implementation 'androidx.viewpager2:viewpager2:1.1.0'
     implementation 'com.google.android.flexbox:flexbox:3.0.0'
     implementation 'im.conversations.webrtc:webrtc-android:119.0.0'
-    //implementation 'ch.threema:webrtc-android:123.0.0'
-    //implementation files('../webrtc/libwebrtc-123.0.0.aar')
 }

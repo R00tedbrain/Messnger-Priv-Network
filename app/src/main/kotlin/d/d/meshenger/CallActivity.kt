@@ -730,9 +730,9 @@ class CallActivity : BaseActivity(), RTCCall.CallContext {
         val settings = binder!!.getSettings()
 
         Log.d(this, "initCall() settings"
-            + " microphone ${currentCall.getMicrophoneEnabled()} => ${settings.enableMicrophoneByDefault}"
-            + ", camera ${currentCall.getCameraEnabled()} => ${settings.enableCameraByDefault}"
-            + ", front camera ${currentCall.getFrontCameraEnabled()} => ${settings.selectFrontCameraByDefault}")
+                + " microphone ${currentCall.getMicrophoneEnabled()} => ${settings.enableMicrophoneByDefault}"
+                + ", camera ${currentCall.getCameraEnabled()} => ${settings.enableCameraByDefault}"
+                + ", front camera ${currentCall.getFrontCameraEnabled()} => ${settings.selectFrontCameraByDefault}")
 
         rtcAudioManager.setEventListener(object : RTCAudioManager.AudioManagerEvents {
             private fun getAudioDeviceName(device: RTCAudioManager.AudioDevice): String {
@@ -740,24 +740,20 @@ class CallActivity : BaseActivity(), RTCCall.CallContext {
                     RTCAudioManager.AudioDevice.SPEAKER_PHONE -> getString(R.string.audio_device_speakerphone)
                     RTCAudioManager.AudioDevice.WIRED_HEADSET -> getString(R.string.audio_device_wired_headset)
                     RTCAudioManager.AudioDevice.EARPIECE -> getString(R.string.audio_device_earpiece)
-                    RTCAudioManager.AudioDevice.BLUETOOTH -> getString(R.string.audio_device_bluetooth)
+                    /* RTCAudioManager.AudioDevice.BLUETOOTH -> getString(R.string.audio_device_bluetooth) */
                 }
             }
 
-            override fun onBluetoothConnectPermissionRequired() {
-                Log.d(this, "onBluetoothConnectPermissionRequired()")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    allowBluetoothConnectForResult.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                } else {
-                    allowBluetoothConnectForResult.launch(Manifest.permission.BLUETOOTH)
-                }
-            }
+            // Eliminada la implementación de onBluetoothConnectPermissionRequired para evitar el error
 
             override fun onAudioDeviceChanged(
-                        oldDevice: RTCAudioManager.AudioDevice,
-                        newDevice: RTCAudioManager.AudioDevice) {
+                oldDevice: RTCAudioManager.AudioDevice,
+                newDevice: RTCAudioManager.AudioDevice
+            ) {
                 val nameOld = getAudioDeviceName(oldDevice)
                 val nameNew = getAudioDeviceName(newDevice)
+
+                // Actualización del mensaje de texto según el dispositivo de audio
                 if (rtcAudioManager.getSpeakerphoneMode() == RTCAudioManager.SpeakerphoneMode.AUTO) {
                     showTextMessage(
                         String.format(getString(R.string.audio_device_auto), nameNew)
@@ -767,6 +763,8 @@ class CallActivity : BaseActivity(), RTCCall.CallContext {
                         String.format(getString(R.string.audio_device_fixed), nameNew)
                     )
                 }
+
+                // Actualización del ícono del altavoz
                 updateSpeakerphoneIcon()
             }
         })
@@ -916,15 +914,6 @@ class CallActivity : BaseActivity(), RTCCall.CallContext {
         updateSpeakerphoneIcon()
     }
 
-    private val allowBluetoothConnectForResult = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-        isGranted -> if (isGranted) {
-            rtcAudioManager.startBluetooth()
-        } else {
-            // do not turn on microphone
-            showTextMessage(getString(R.string.missing_bluetooth_permission))
-        }
-        Log.d(this, "allowBluetoothConnectForResult() isGranted=$isGranted")
-    }
 
     private val enabledMicrophoneForResult = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         isGranted -> if (isGranted) {

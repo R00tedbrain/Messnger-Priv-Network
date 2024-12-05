@@ -1,4 +1,3 @@
-// FileUtils.kt
 package d.d.meshenger
 
 import android.content.Context

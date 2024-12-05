@@ -1,5 +1,3 @@
-// QRShowActivity.kt
-
 package d.d.meshenger
 
 import android.app.Activity

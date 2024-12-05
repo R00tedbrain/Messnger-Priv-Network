@@ -1,5 +1,3 @@
-// MainService.kt
-
 package d.d.meshenger
 
 import android.annotation.SuppressLint

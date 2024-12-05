@@ -1,15 +1,30 @@
+// Crypto.kt
+
 package d.d.meshenger
 
+import android.content.Context
+import android.os.Build
+import android.util.Base64
 import org.libsodium.jni.Sodium
 import org.libsodium.jni.SodiumConstants
 import java.nio.charset.Charset
+import java.security.KeyPair // Añade esta importación
+import java.security.MessageDigest
 import java.util.*
 
 internal object Crypto {
-    // for development / testing only
+    // Para desarrollo/pruebas solamente
     private const val disableCrypto = false
 
-    // decrypt database using a password
+    // Generar una huella digital (fingerprint) de una clave pública
+    fun generateFingerprint(publicKey: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hash = digest.digest(publicKey)
+        // Usar android.util.Base64 para compatibilidad con API Level 21+
+        return Base64.encodeToString(hash, Base64.NO_WRAP)
+    }
+
+    // Desencriptar base de datos usando una contraseña
     @JvmStatic
     fun decryptDatabase(encryptedMessage: ByteArray?, password: ByteArray?): ByteArray? {
         if (encryptedMessage == null || password == null) {
@@ -24,7 +39,7 @@ internal object Crypto {
             return encryptedMessage
         }
 
-        // separate salt, nonce and encrypted data
+        // Separar salt, nonce y datos encriptados
         val header = ByteArray(4)
         val salt = ByteArray(Sodium.crypto_pwhash_saltbytes())
         val nonce = ByteArray(SodiumConstants.NONCE_BYTES)
@@ -41,12 +56,12 @@ internal object Crypto {
             encryptedData.size
         )
 
-        // expect header to be 0
+        // Se espera que el header sea 0
         if (!(header[0].toInt() == 0 && header[1].toInt() == 0 && header[2].toInt() == 0 && header[3].toInt() == 0)) {
             return null
         }
 
-        // hash password into key
+        // Hash de la contraseña para obtener la clave
         val key = ByteArray(Sodium.crypto_box_seedbytes())
         val rc1 = Sodium.crypto_pwhash(
             key, key.size, password, password.size, salt,
@@ -55,7 +70,7 @@ internal object Crypto {
             Sodium.crypto_pwhash_alg_default()
         )
 
-        // decrypt
+        // Desencriptar
         val decryptedData = ByteArray(encryptedData.size - SodiumConstants.MAC_BYTES)
         val rc2 = Sodium.crypto_secretbox_open_easy(
             decryptedData,
@@ -65,7 +80,7 @@ internal object Crypto {
             key
         )
 
-        // zero own memory
+        // Limpiar memoria
         Arrays.fill(header, 0.toByte())
         Arrays.fill(salt, 0.toByte())
         Arrays.fill(key, 0.toByte())
@@ -79,7 +94,7 @@ internal object Crypto {
         }
     }
 
-    // encrypt database using a password
+    // Encriptar base de datos usando una contraseña
     @JvmStatic
     fun encryptDatabase(data: ByteArray?, password: ByteArray?): ByteArray? {
         if (data == null || password == null) {
@@ -90,11 +105,11 @@ internal object Crypto {
             return data
         }
 
-        // hash password into key
+        // Hash de la contraseña para obtener la clave
         val salt = ByteArray(Sodium.crypto_pwhash_saltbytes())
         Sodium.randombytes_buf(salt, salt.size)
 
-        // hash password into key
+        // Hash de la contraseña para obtener la clave
         val key = ByteArray(Sodium.crypto_box_seedbytes())
         val rc1 = Sodium.crypto_pwhash(
             key, key.size, password, password.size, salt,
@@ -108,15 +123,15 @@ internal object Crypto {
         header[2] = 0
         header[3] = 0
 
-        // create nonce
+        // Crear nonce
         val nonce = ByteArray(SodiumConstants.NONCE_BYTES)
         Sodium.randombytes_buf(nonce, nonce.size)
 
-        // encrypt
+        // Encriptar
         val encryptedData = ByteArray(SodiumConstants.MAC_BYTES + data.size)
         val rc2 = Sodium.crypto_secretbox_easy(encryptedData, data, data.size, nonce, key)
 
-        // prepend header, salt and nonce
+        // Prepend header, salt y nonce
         val encryptedMessage =
             ByteArray(header.size + salt.size + nonce.size + encryptedData.size)
         System.arraycopy(header, 0, encryptedMessage, 0, header.size)
@@ -130,7 +145,7 @@ internal object Crypto {
             encryptedData.size
         )
 
-        // zero own memory
+        // Limpiar memoria
         Arrays.fill(header, 0.toByte())
         Arrays.fill(salt, 0.toByte())
         Arrays.fill(key, 0.toByte())
@@ -148,15 +163,25 @@ internal object Crypto {
     fun encryptMessage(
         message: String,
         otherPublicKey: ByteArray?,
-        ownPublicKey: ByteArray,
-        ownSecretKey: ByteArray?
+        context: Context
     ): ByteArray? {
         if (disableCrypto) {
             return message.toByteArray()
         }
 
+        // Verificar si el dispositivo soporta API Level 23 o superior
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            // Dispositivo incompatible
+            return null
+        }
+
+        // Obtener el par de claves propio desde el KeyStore
+        val keyPair = KeyStoreManager.getOrCreateKeyPair(context) ?: return null
+        val ownPublicKey = keyPair.public.encoded
+        val ownPrivateKey = keyPair.private.encoded
+
         val messageBytes = message.toByteArray()
-        val signed = sign(messageBytes, ownSecretKey) ?: return null
+        val signed = sign(messageBytes, ownPrivateKey) ?: return null
         val data = ByteArray(ownPublicKey.size + signed.size)
         System.arraycopy(ownPublicKey, 0, data, 0, ownPublicKey.size)
         System.arraycopy(signed, 0, data, ownPublicKey.size, signed.size)
@@ -167,36 +192,45 @@ internal object Crypto {
     fun decryptMessage(
         message: ByteArray?,
         otherPublicKeySignOut: ByteArray?,
-        ownPublicKey: ByteArray?,
-        ownSecretKey: ByteArray?
+        context: Context
     ): String? {
         if (otherPublicKeySignOut == null || otherPublicKeySignOut.size != Sodium.crypto_sign_publickeybytes()) {
             return null
         }
 
-        if (disableCrypto) {
-            return String((message)!!, Charset.forName("UTF-8"))
+        // Verificar si el dispositivo soporta API Level 23 o superior
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            // Dispositivo incompatible
+            return null
         }
 
-        // make sure this is zeroed
-        Arrays.fill(otherPublicKeySignOut, 0.toByte())
-        val messageData = decrypt(message, ownPublicKey, ownSecretKey)
+        // Obtener el par de claves propio desde el KeyStore
+        val keyPair = KeyStoreManager.getOrCreateKeyPair(context) ?: return null
+        val ownPublicKey = keyPair.public.encoded
+        val ownPrivateKey = keyPair.private.encoded
+
+        if (disableCrypto) {
+            return String(message!!, Charset.forName("UTF-8"))
+        }
+
+        val messageData = decrypt(message, ownPublicKey, ownPrivateKey)
         if (messageData == null || messageData.size <= otherPublicKeySignOut.size) {
             return null
         }
 
-        // split message data in sender public key and content
-        val messageSignedData = ByteArray(messageData.size - otherPublicKeySignOut.size)
-        System.arraycopy(messageData, 0, otherPublicKeySignOut, 0, otherPublicKeySignOut.size)
+        // Dividir los datos del mensaje en clave pública del remitente y contenido
+        val senderPublicKey = ByteArray(otherPublicKeySignOut.size)
+        System.arraycopy(messageData, 0, senderPublicKey, 0, senderPublicKey.size)
+        val messageSignedData = ByteArray(messageData.size - senderPublicKey.size)
         System.arraycopy(
             messageData,
-            otherPublicKeySignOut.size,
+            senderPublicKey.size,
             messageSignedData,
             0,
             messageSignedData.size
         )
-        val unsignedData = unsign(messageSignedData, otherPublicKeySignOut)
-            ?: // signature does not match transmitted public key
+        val unsignedData = unsign(messageSignedData, senderPublicKey)
+            ?: // La firma no coincide con la clave pública transmitida
             return null
         return String(unsignedData, Charset.forName("UTF-8"))
     }
@@ -218,7 +252,7 @@ internal object Crypto {
         }
     }
 
-    // verify signed message
+    // Verificar mensaje firmado
     private fun unsign(signedMessage: ByteArray?, publicKey: ByteArray?): ByteArray? {
         if (signedMessage == null || signedMessage.size < Sodium.crypto_sign_bytes()) {
             return null
@@ -242,7 +276,7 @@ internal object Crypto {
         }
     }
 
-    // decrypt an anonymous message using the receivers public key
+    // Encriptar un mensaje anónimo usando la clave pública del receptor
     private fun encrypt(data: ByteArray?, publicKeySign: ByteArray?): ByteArray? {
         if (data == null) {
             return null
@@ -264,7 +298,7 @@ internal object Crypto {
         }
     }
 
-    // decrypt an anonymous message using the receivers public and secret key
+    // Desencriptar un mensaje anónimo usando las claves pública y privada del receptor
     private fun decrypt(
         ciphertext: ByteArray?,
         publicKeySign: ByteArray?,
@@ -280,7 +314,7 @@ internal object Crypto {
             return null
         }
 
-        // convert signature keys to box keys
+        // Convertir claves de firma a claves de caja
         val publicKeyBox = ByteArray(Sodium.crypto_box_publickeybytes())
         val secretKeyBox = ByteArray(Sodium.crypto_box_secretkeybytes())
         val rc1 = Sodium.crypto_sign_ed25519_pk_to_curve25519(publicKeyBox, publicKeySign)

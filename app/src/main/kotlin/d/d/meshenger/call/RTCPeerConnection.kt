@@ -48,16 +48,12 @@ abstract class RTCPeerConnection(
             return false
         }
 
-        //val otherPublicKey = ByteArray(Sodium.crypto_sign_publickeybytes())
-        val settings = binder.getSettings()
-        val ownSecretKey = settings.secretKey
-        val ownPublicKey = settings.publicKey
+        val context = callActivity?.getContext() ?: binder.getService()
 
         val encrypted = Crypto.encryptMessage(
             message,
             contact.publicKey,
-            ownPublicKey,
-            ownSecretKey
+            context
         )
 
         if (encrypted == null) {
@@ -90,8 +86,6 @@ abstract class RTCPeerConnection(
 
         val otherPublicKey = ByteArray(Sodium.crypto_sign_publickeybytes())
         val settings = binder.getSettings()
-        val ownPublicKey = settings.publicKey
-        val ownSecretKey = settings.secretKey
 
         val connector = Connector(
             settings.connectTimeout,
@@ -146,11 +140,13 @@ abstract class RTCPeerConnection(
             val obj = JSONObject()
             obj.put("action", "call")
             obj.put("offer", filteredOffer)
+
+            val context = binder.getService()
+
             val encrypted = Crypto.encryptMessage(
                 obj.toString(),
                 contact.publicKey,
-                ownPublicKey,
-                ownSecretKey
+                context
             )
 
             if (encrypted == null) {
@@ -170,11 +166,12 @@ abstract class RTCPeerConnection(
                 return
             }
 
+            val context = binder.getService()
+
             val decrypted = Crypto.decryptMessage(
                 response,
                 otherPublicKey,
-                ownPublicKey,
-                ownSecretKey
+                context
             )
 
             if (decrypted == null) {
@@ -205,7 +202,7 @@ abstract class RTCPeerConnection(
 
         run {
             // remember latest working address and set state
-            val workingAddress = InetSocketAddress(remoteAddress.address, MainService.serverPort)
+            val workingAddress = InetSocketAddress(remoteAddress.address, MainService.SERVER_PORT)
             val storedContact = binder.getContacts().getContactByPublicKey(contact.publicKey)
             if (storedContact != null) {
                 storedContact.lastWorkingAddress = workingAddress
@@ -218,7 +215,7 @@ abstract class RTCPeerConnection(
 
         // send keep alive to detect a broken connection
         val writeExecutor = Executors.newSingleThreadExecutor()
-        writeExecutor?.execute {
+        writeExecutor.execute {
             val pw = PacketWriter(socket)
 
             Log.d(this, "createOutgoingCallInternal() start to send keep_alive")
@@ -226,11 +223,13 @@ abstract class RTCPeerConnection(
                 try {
                     val obj = JSONObject()
                     obj.put("action", "keep_alive")
+
+                    val context = binder.getService()
+
                     val encrypted = Crypto.encryptMessage(
                         obj.toString(),
                         contact.publicKey,
-                        ownPublicKey,
-                        ownSecretKey
+                        context
                     ) ?: break
                     pw.writeMessage(encrypted)
                     Thread.sleep(SOCKET_TIMEOUT_MS / 2)
@@ -257,11 +256,12 @@ abstract class RTCPeerConnection(
                 continue
             }
 
+            val context = binder.getService()
+
             val decrypted = Crypto.decryptMessage(
                 response,
                 otherPublicKey,
-                ownPublicKey,
-                ownSecretKey
+                context
             )
 
             if (decrypted == null) {
@@ -281,7 +281,12 @@ abstract class RTCPeerConnection(
                 reportStateChange(CallState.CONNECTED)
                 val answer = obj.optString("answer")
                 if (answer.isNotEmpty()) {
-                    handleAnswer(RTCUtils.completeAnswerAfterReception(answer, socket.remoteSocketAddress as InetSocketAddress))
+                    handleAnswer(
+                        RTCUtils.completeAnswerAfterReception(
+                            answer,
+                            socket.remoteSocketAddress as InetSocketAddress
+                        )
+                    )
                 } else {
                     reportStateChange(CallState.ERROR_COMMUNICATION)
                 }
@@ -303,7 +308,6 @@ abstract class RTCPeerConnection(
 
         Log.d(this, "createOutgoingCallInternal() close socket")
         AddressUtils.closeSocket(socket)
-        //Log.d(this, "createOutgoingCallInternal() dataChannel is null: ${dataChannel == null}")
 
         Log.d(this, "createOutgoingCallInternal() wait for writeExecutor")
         writeExecutor.shutdown()
@@ -331,17 +335,13 @@ abstract class RTCPeerConnection(
 
         val otherPublicKey = ByteArray(Sodium.crypto_sign_publickeybytes())
         val settings = binder.getSettings()
-        val ownPublicKey = settings.publicKey
-        val ownSecretKey = settings.secretKey
         val pr = PacketReader(socket)
-
-        Log.d(this, "continueOnIncomingSocket() expected dismissed/keep_alive")
 
         var lastKeepAlive = System.currentTimeMillis()
 
         // send keep alive to detect a broken connection
         val writeExecutor = Executors.newSingleThreadExecutor()
-        writeExecutor?.execute {
+        writeExecutor.execute {
             val pw = PacketWriter(socket)
 
             Log.d(this, "continueOnIncomingSocket() start to send keep_alive")
@@ -349,11 +349,13 @@ abstract class RTCPeerConnection(
                 try {
                     val obj = JSONObject()
                     obj.put("action", "keep_alive")
+
+                    val context = binder.getService()
+
                     val encrypted = Crypto.encryptMessage(
                         obj.toString(),
                         contact.publicKey,
-                        ownPublicKey,
-                        ownSecretKey
+                        context
                     ) ?: break
                     pw.writeMessage(encrypted)
                     Thread.sleep(SOCKET_TIMEOUT_MS / 2)
@@ -377,11 +379,12 @@ abstract class RTCPeerConnection(
                 continue
             }
 
+            val context = binder.getService()
+
             val decrypted = Crypto.decryptMessage(
                 response,
                 otherPublicKey,
-                ownPublicKey,
-                ownSecretKey
+                context
             )
 
             if (decrypted == null) {
@@ -409,7 +412,6 @@ abstract class RTCPeerConnection(
         writeExecutor.shutdown()
         writeExecutor.awaitTermination(100L, TimeUnit.MILLISECONDS)
 
-        //Log.d(this, "continueOnIncomingSocket() dataChannel is null: ${dataChannel == null}")
         AddressUtils.closeSocket(socket)
 
         // detect broken initial connection
@@ -427,11 +429,11 @@ abstract class RTCPeerConnection(
         } catch (e: RejectedExecutionException) {
             e.printStackTrace()
             // can happen when the executor has shut down
-            Log.w(this, "execute() catched RejectedExecutionException")
+            Log.w(this, "execute() caught RejectedExecutionException")
             return false
         } catch (e: Exception) {
             e.printStackTrace()
-            Log.w(this, "execute() catched $e")
+            Log.w(this, "execute() caught $e")
             reportStateChange(CallState.ERROR_COMMUNICATION)
             return false
         }
@@ -445,15 +447,13 @@ abstract class RTCPeerConnection(
         val socket = commSocket
         if (socket != null && !socket.isClosed) {
             val pw = PacketWriter(socket)
-            val settings = binder.getSettings()
-            val ownPublicKey = settings.publicKey
-            val ownSecretKey = settings.secretKey
+
+            val context = binder.getService()
 
             val encrypted = Crypto.encryptMessage(
                 "{\"action\":\"dismissed\"}",
                 contact.publicKey,
-                ownPublicKey,
-                ownSecretKey
+                context
             )
 
             if (encrypted == null) {
@@ -513,21 +513,8 @@ abstract class RTCPeerConnection(
     companion object {
         private const val SOCKET_TIMEOUT_MS = 5000L
 
-        // used to pass incoming RTCCall to CallActiviy
-        public var incomingRTCCall: RTCCall? = null
-
-/*
-        // for debug purposes
-        private fun ByteArray.toHex(): String = joinToString(separator = "") { eachByte -> "%02x".format(eachByte) }
-
-        private fun debugPacket(label: String, msg: ByteArray?) {
-            if (msg != null) {
-                Log.d(this, "$label: ${msg.size}, ${msg.toHex()}")
-            } else {
-                Log.d(this, "$label: message is null!")
-            }
-        }
-*/
+        // used to pass incoming RTCCall to CallActivity
+        var incomingRTCCall: RTCCall? = null
 
         fun createIncomingCall(binder: MainService.MainBinder, socket: Socket) {
             Thread {
@@ -546,8 +533,11 @@ abstract class RTCPeerConnection(
             val otherPublicKey = ByteArray(Sodium.crypto_sign_publickeybytes())
             val settings = binder.getSettings()
             val blockUnknown = settings.blockUnknown
-            val ownSecretKey = settings.secretKey
-            val ownPublicKey = settings.publicKey
+
+            val pr = PacketReader(socket)
+            val pw = PacketWriter(socket)
+
+            val context = binder.getService()
 
             val decline = {
                 Log.d(this, "createIncomingCallInternal() declining...")
@@ -556,12 +546,10 @@ abstract class RTCPeerConnection(
                     val encrypted = Crypto.encryptMessage(
                         "{\"action\":\"dismissed\"}",
                         otherPublicKey,
-                        ownPublicKey,
-                        ownSecretKey
+                        context
                     )
 
                     if (encrypted != null) {
-                        val pw = PacketWriter(socket)
                         pw.writeMessage(encrypted)
                     }
 
@@ -572,8 +560,6 @@ abstract class RTCPeerConnection(
             }
 
             val remoteAddress = socket.remoteSocketAddress as InetSocketAddress
-            val pw = PacketWriter(socket)
-            val pr = PacketReader(socket)
 
             Log.d(this, "createIncomingCallInternal() incoming peerConnection from $remoteAddress")
 
@@ -584,9 +570,7 @@ abstract class RTCPeerConnection(
                 return
             }
 
-            //Log.d(this, "request: ${request.toHex()}")
-
-            val decrypted = Crypto.decryptMessage(request, otherPublicKey, ownPublicKey, ownSecretKey)
+            val decrypted = Crypto.decryptMessage(request, otherPublicKey, context)
             if (decrypted == null) {
                 Log.d(this, "createIncomingCallInternal() decryption failed")
                 // cause: the caller might use the wrong key
@@ -614,7 +598,7 @@ abstract class RTCPeerConnection(
                 contact = Contact("", otherPublicKey.clone(), ArrayList())
             }
 
-            // suspicious change of identity in during peerConnection...
+            // suspicious change of identity during peerConnection...
             if (!contact.publicKey.contentEquals(otherPublicKey)) {
                 Log.d(this, "createIncomingCallInternal() suspicious change of key")
                 decline()
@@ -622,7 +606,7 @@ abstract class RTCPeerConnection(
             }
 
             // remember latest working address and set state
-            contact.lastWorkingAddress = InetSocketAddress(remoteAddress.address, MainService.serverPort)
+            contact.lastWorkingAddress = InetSocketAddress(remoteAddress.address, MainService.SERVER_PORT)
 
             val obj = JSONObject(decrypted)
             val action = obj.optString("action", "")
@@ -657,8 +641,7 @@ abstract class RTCPeerConnection(
                     val encrypted = Crypto.encryptMessage(
                         "{\"action\":\"ringing\"}",
                         contact.publicKey,
-                        ownPublicKey,
-                        ownSecretKey
+                        context
                     )
 
                     if (encrypted == null) {
@@ -703,8 +686,7 @@ abstract class RTCPeerConnection(
                     val encrypted = Crypto.encryptMessage(
                         "{\"action\":\"pong\"}",
                         contact.publicKey,
-                        ownPublicKey,
-                        ownSecretKey
+                        context
                     )
 
                     if (encrypted == null) {

@@ -2,6 +2,7 @@ package d.d.meshenger
 
 import android.content.*
 import android.os.Bundle
+import android.util.Base64
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
@@ -38,7 +39,7 @@ class ContactListFragment : Fragment() {
                 intent.putExtra("EXTRA_CONTACT", contact)
                 startActivity(intent)
             }
-    }
+        }
 
     private val onContactLongClickListener =
         AdapterView.OnItemLongClickListener { adapterView, view, i, _ ->
@@ -60,7 +61,7 @@ class ContactListFragment : Fragment() {
                 when (title) {
                     details -> {
                         val intent = Intent(activity, ContactDetailsActivity::class.java)
-                        intent.putExtra("EXTRA_CONTACT_PUBLICKEY", Utils.byteArrayToHexString(contact.publicKey))
+                        intent.putExtra("EXTRA_CONTACT_PUBLICKEY", Base64.encodeToString(contact.publicKey, Base64.NO_WRAP))
                         startActivity(intent)
                     }
                     delete -> showDeleteDialog(publicKey, contact.name)
@@ -68,7 +69,7 @@ class ContactListFragment : Fragment() {
                     share -> shareContact(contact)
                     qrcode -> {
                         val intent = Intent(activity, QRShowActivity::class.java)
-                        intent.putExtra("EXTRA_CONTACT_PUBLICKEY", Utils.byteArrayToHexString(contact.publicKey))
+                        intent.putExtra("EXTRA_CONTACT_PUBLICKEY", Base64.encodeToString(contact.publicKey, Base64.NO_WRAP))
                         startActivity(intent)
                     }
                 }
@@ -104,7 +105,7 @@ class ContactListFragment : Fragment() {
             val binder = (activity as MainActivity).binder
             if (binder != null) {
                 val intent = Intent(activity, QRShowActivity::class.java)
-                intent.putExtra("EXTRA_CONTACT_PUBLICKEY", Utils.byteArrayToHexString(binder.getSettings().publicKey))
+                intent.putExtra("EXTRA_CONTACT_PUBLICKEY", Base64.encodeToString(binder.getSettings().publicKey, Base64.NO_WRAP))
                 startActivity(intent)
             }
         }
@@ -125,16 +126,9 @@ class ContactListFragment : Fragment() {
     }
 
     private val refreshContactListReceiver = object : BroadcastReceiver() {
-        //private var lastTimeRefreshed = 0L
-
         override fun onReceive(context: Context, intent: Intent) {
             Log.d(this@ContactListFragment, "trigger refreshContactList() from broadcast at ${this@ContactListFragment.lifecycle.currentState}")
-            // prevent this method from being called too often
-            //val now = System.currentTimeMillis()
-            //if ((now - lastTimeRefreshed) > 1000) {
-            //    lastTimeRefreshed = now
-                refreshContactList()
-            //}
+            refreshContactList()
         }
     }
 
@@ -161,11 +155,11 @@ class ContactListFragment : Fragment() {
 
     private fun showPingAllButton(): Boolean {
         val binder = (activity as MainActivity).binder
-        if (binder != null) {
-            return !binder.getSettings().automaticStatusUpdates
+        return if (binder != null) {
+            !binder.getSettings().automaticStatusUpdates
         } else {
             // it does not hurt to show the button
-            return true
+            true
         }
     }
 
@@ -188,18 +182,18 @@ class ContactListFragment : Fragment() {
             showAnimation = TranslateAnimation(0f, 0f, -distance * 3, 0f)
             alphaAnimation = AlphaAnimation(1.0f, 0.0f)
             (fab as FloatingActionButton).setImageResource(R.drawable.qr_glass)
-            fabGen.y = fabGen.y + distance * 1
-            fabScan.y = fabScan.y + distance * 2
-            fabPingAll.y = fabPingAll.y + distance * 3
+            fabGen.y += distance * 1
+            fabScan.y += distance * 2
+            fabPingAll.y += distance * 3
         } else {
             pingAnimation = TranslateAnimation(0f, 0f, distance * 1, 0f)
             scanAnimation = TranslateAnimation(0f, 0f, distance * 2, 0f)
             showAnimation = TranslateAnimation(0f, 0f, distance * 3, 0f)
             alphaAnimation = AlphaAnimation(0.0f, 1.0f)
             (fab as FloatingActionButton).setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            fabGen.y = fabGen.y - distance * 1
-            fabScan.y = fabScan.y - distance * 2
-            fabPingAll.y = fabPingAll.y - distance * 3
+            fabGen.y -= distance * 1
+            fabScan.y -= distance * 2
+            fabPingAll.y -= distance * 3
         }
 
         scanSet.addAnimation(scanAnimation)
@@ -237,10 +231,10 @@ class ContactListFragment : Fragment() {
             fabGen.clearAnimation()
             fabPingAll.clearAnimation()
 
-            fabGen.y = fabGen.y + 200 * 1
-            fabScan.y = fabScan.y + 200 * 2
+            fabGen.y += 200 * 1
+            fabScan.y += 200 * 2
             if (showPingAllButton()) {
-                fabPingAll.y = fabPingAll.y + 200 * 3
+                fabPingAll.y += 200 * 3
             }
             fabExpanded = false
         }
@@ -269,12 +263,13 @@ class ContactListFragment : Fragment() {
         builder.setMessage(name)
         builder.setCancelable(false) // prevent key shortcut to cancel dialog
         builder.setPositiveButton(R.string.button_yes) { dialog: DialogInterface, _: Int ->
-                binder.deleteContact(publicKey)
-                dialog.cancel()
-            }
+            binder.deleteContact(publicKey)
+            dialog.cancel()
+        }
 
         builder.setNegativeButton(R.string.button_no) { dialog: DialogInterface, _: Int ->
-            dialog.cancel() }
+            dialog.cancel()
+        }
 
         // create dialog box
         val alert = builder.create()

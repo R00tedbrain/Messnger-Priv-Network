@@ -202,7 +202,7 @@ class RTCCall : RTCPeerConnection {
         return true
     }
 
-    // called for incoming calls
+    // llamado para llamadas entrantes
     constructor(
         binder: MainService.MainBinder,
         contact: Contact,
@@ -216,7 +216,7 @@ class RTCCall : RTCPeerConnection {
         createMediaConstraints()
     }
 
-    // called for outgoing calls
+    // llamado para llamadas salientes
     constructor(
         binder: MainService.MainBinder,
         contact: Contact
@@ -610,7 +610,7 @@ class RTCCall : RTCPeerConnection {
         this.eglBase = eglBase
     }
 
-    // called when call accepted
+    // llamado cuando la llamada es aceptada
     fun initIncoming() {
         Log.d(this, "initIncoming()")
         Utils.checkIsOnMainThread()
@@ -632,8 +632,6 @@ class RTCCall : RTCPeerConnection {
                     if (iceGatheringState == IceGatheringState.COMPLETE) {
                         try {
                             val socket = commSocket!!
-                            val ownPublicKey = settings.publicKey
-                            val ownSecretKey = settings.secretKey
                             val answer = peerConnection!!.localDescription.description
                             val pw = PacketWriter(socket)
                             val obj = JSONObject()
@@ -642,8 +640,7 @@ class RTCCall : RTCPeerConnection {
                             val encrypted = Crypto.encryptMessage(
                                 obj.toString(),
                                 contact.publicKey,
-                                ownPublicKey,
-                                ownSecretKey
+                                callActivity!!.getContext()
                             )
                             if (encrypted != null) {
                                 Log.d(this, "onIceGatheringChange() send connected")
@@ -722,7 +719,7 @@ class RTCCall : RTCPeerConnection {
         }
     }
 
-    // send over data channel, when the call is established
+    // enviar a través del canal de datos cuando la llamada está establecida
     private fun hangupInternal() {
         Log.d(this, "hangupInternal")
 

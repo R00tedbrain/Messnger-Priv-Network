@@ -7,16 +7,15 @@ import org.libsodium.jni.Sodium
 import java.net.Socket
 
 /*
- * Checks if a contact is online.
-*/
+ * Verifica si un contacto está en línea.
+ */
 class Pinger(val binder: MainService.MainBinder, val contacts: List<Contact>) : Runnable {
-    private fun pingContact(contact: Contact) : Contact.State {
+    private fun pingContact(contact: Contact): Contact.State {
         Log.d(this, "pingContact() contact: ${contact.name}")
 
         val otherPublicKey = ByteArray(Sodium.crypto_sign_publickeybytes())
         val settings = binder.getSettings()
-        val ownPublicKey = settings.publicKey
-        val ownSecretKey = settings.secretKey
+        val context = binder.getService()
         var socket: Socket? = null
 
         try {
@@ -45,8 +44,7 @@ class Pinger(val binder: MainService.MainBinder, val contacts: List<Contact>) : 
             val encrypted = Crypto.encryptMessage(
                 "{\"action\":\"ping\"}",
                 contact.publicKey,
-                ownPublicKey,
-                ownSecretKey
+                context
             ) ?: return Contact.State.COMMUNICATION_FAILED
 
             pw.writeMessage(encrypted)
@@ -54,8 +52,7 @@ class Pinger(val binder: MainService.MainBinder, val contacts: List<Contact>) : 
             val decrypted = Crypto.decryptMessage(
                 request,
                 otherPublicKey,
-                ownPublicKey,
-                ownSecretKey
+                context
             ) ?: return Contact.State.AUTHENTICATION_FAILED
 
             if (!otherPublicKey.contentEquals(contact.publicKey)) {
@@ -64,22 +61,22 @@ class Pinger(val binder: MainService.MainBinder, val contacts: List<Contact>) : 
 
             val obj = JSONObject(decrypted)
             val action = obj.optString("action", "")
-            if (action == "pong") {
+            return if (action == "pong") {
                 Log.d(this, "pingContact() got pong")
-                return Contact.State.CONTACT_ONLINE
+                Contact.State.CONTACT_ONLINE
             } else {
-                return Contact.State.COMMUNICATION_FAILED
+                Contact.State.COMMUNICATION_FAILED
             }
         } catch (e: Exception) {
             return Contact.State.COMMUNICATION_FAILED
         } finally {
-            // make sure to close the socket
+            // asegurarse de cerrar el socket
             AddressUtils.closeSocket(socket)
         }
     }
 
     override fun run() {
-        // set all states to unknown
+        // establecer todos los estados a desconocido
         for (contact in contacts) {
             binder.getContacts()
                 .getContactByPublicKey(contact.publicKey)
@@ -89,12 +86,12 @@ class Pinger(val binder: MainService.MainBinder, val contacts: List<Contact>) : 
         MainService.refreshContacts(binder.getService())
         MainService.refreshEvents(binder.getService())
 
-        // ping contacts
+        // ping a los contactos
         for (contact in contacts) {
             val state = pingContact(contact)
             Log.d(this, "contact state is $state")
 
-            // set contact state
+            // establecer estado del contacto
             binder.getContacts()
                 .getContactByPublicKey(contact.publicKey)
                 ?.state = state

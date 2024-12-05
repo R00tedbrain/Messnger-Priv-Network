@@ -1,3 +1,5 @@
+// MainActivity.kt
+
 package d.d.meshenger
 
 import android.app.Activity
@@ -10,15 +12,12 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.net.Uri
 import android.os.*
-import android.provider.Settings
 import android.util.TypedValue
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.*
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.Toolbar
 import androidx.core.view.size
 import androidx.fragment.app.Fragment
@@ -30,7 +29,7 @@ import com.google.android.material.tabs.TabLayout.OnTabSelectedListener
 import com.google.android.material.tabs.TabLayoutMediator
 import d.d.meshenger.MainService.MainBinder
 
-// the main view with tabs
+// Vista principal con pestañas
 class MainActivity : BaseActivity(), ServiceConnection {
     internal var binder: MainBinder? = null
     private lateinit var viewPager: ViewPager2
@@ -104,16 +103,16 @@ class MainActivity : BaseActivity(), ServiceConnection {
             val storedAddresses = localBinder.getSettings().addresses
             val storedIPAddresses = storedAddresses.filter { AddressUtils.isIPAddress(it) }
             if (storedAddresses.isNotEmpty() && storedIPAddresses.isEmpty()) {
-                // ignore, we only have domains configured
+                // Ignorar, solo tenemos dominios configurados
             } else if (storedAddresses.isEmpty()) {
-                // no addresses configured at all
+                // No hay direcciones configuradas
                 Toast.makeText(this, R.string.warning_no_addresses_configured, Toast.LENGTH_LONG).show()
             } else {
                 if (isWifiConnected()) {
                     val systemAddresses = AddressUtils.collectAddresses().map { it.address }
                     if (storedIPAddresses.intersect(systemAddresses.toSet()).isEmpty()) {
-                        // none of the configured addresses are used in the system
-                        // addresses might have changed!
+                        // Ninguna de las direcciones configuradas está en uso en el sistema
+                        // ¡Las direcciones podrían haber cambiado!
                         Toast.makeText(this, R.string.warning_no_addresses_found, Toast.LENGTH_LONG).show()
                     }
                 }
@@ -121,7 +120,10 @@ class MainActivity : BaseActivity(), ServiceConnection {
         }, 700)
     }
 
-    // permission is needed to bring incoming calls to the foreground
+    // Eliminados métodos y variables relacionados con el permiso de superposición
+
+    /*
+    // Se necesita permiso para mostrar llamadas entrantes en primer plano
     private fun checkPermissionToDrawOverlays() {
         if (Build.VERSION.SDK_INT >= 23) {
             if (!Settings.canDrawOverlays(this)) {
@@ -140,6 +142,7 @@ class MainActivity : BaseActivity(), ServiceConnection {
             }
         }
     }
+    */
 
     private fun getColorDrawable(attr: Int): Drawable {
         val typedValue = TypedValue()
@@ -154,7 +157,7 @@ class MainActivity : BaseActivity(), ServiceConnection {
 
         val settings = binder!!.getSettings()
 
-        // data source for the views was not ready before
+        // La fuente de datos para las vistas no estaba lista antes
         (viewPager.adapter as ViewPagerFragmentAdapter).let {
             it.ready = true
             it.disableCallHistory = settings.disableCallHistory
@@ -165,20 +168,19 @@ class MainActivity : BaseActivity(), ServiceConnection {
         if (settings.disableCallHistory) {
             tabLayout.visibility = View.GONE
         } else {
-            // default
+            // Por defecto
             tabLayout.visibility = View.VISIBLE
         }
 
-        // workaround since TabLayout with app:tabBackground and xml with
-        // selected/unselected themeable tab colors create an exception.
+        // Solución para TabLayout con app:tabBackground y colores de pestañas seleccionados/no seleccionados
         tabLayout.addOnTabSelectedListener(object : OnTabSelectedListener {
             init {
                 resetBackgroundColor()
             }
 
             private fun resetBackgroundColor() {
-                Log.d(this, "resetBackgroundColor ${tabLayout.size}")
-                for (i in 0..tabLayout.size) {
+                Log.d(this, "resetBackgroundColor ${tabLayout.tabCount}")
+                for (i in 0 until tabLayout.tabCount) {
                     val tab = tabLayout.getTabAt(i)
                     if (tab != null) {
                         tab.view.background = getColorDrawable(R.attr.tabColor)
@@ -196,7 +198,7 @@ class MainActivity : BaseActivity(), ServiceConnection {
             }
 
             override fun onTabReselected(tab: TabLayout.Tab?) {
-                // nothing to do
+                // No hacer nada
             }
         })
 
@@ -205,7 +207,7 @@ class MainActivity : BaseActivity(), ServiceConnection {
             toolbarLabel.visibility = View.VISIBLE
             toolbarLabel.text = settings.username
         } else {
-            // default
+            // Por defecto
             toolbarLabel.visibility = View.GONE
         }
 
@@ -224,7 +226,7 @@ class MainActivity : BaseActivity(), ServiceConnection {
         }.attach()
 
         if (!addressWarningShown) {
-            // only show once since app start
+            // Mostrar solo una vez desde el inicio de la aplicación
             showInvalidAddressSettingsWarning()
             addressWarningShown = true
         }
@@ -232,13 +234,16 @@ class MainActivity : BaseActivity(), ServiceConnection {
         MainService.refreshEvents(this)
         MainService.refreshContacts(this)
 
+        // Eliminado código relacionado con el permiso de superposición
+        /*
         if (!settings.ignoreOverlayPermission) {
             checkPermissionToDrawOverlays()
         }
+        */
     }
 
     override fun onServiceDisconnected(componentName: ComponentName) {
-        // nothing to do
+        // No hacer nada
     }
 
     private fun menuAction(itemId: Int) {
@@ -259,7 +264,7 @@ class MainActivity : BaseActivity(), ServiceConnection {
         }
     }
 
-    // request password for setting activity
+    // Solicitar contraseña para la actividad de ajustes
     private fun showMenuPasswordDialog(itemId: Int, menuPassword: String) {
         val dialog = Dialog(this)
         dialog.setContentView(R.layout.dialog_enter_database_password)
@@ -272,18 +277,18 @@ class MainActivity : BaseActivity(), ServiceConnection {
         okButton.setOnClickListener {
             val password = passwordEditText.text.toString()
             if (menuPassword == password) {
-                // start menu action
+                // Iniciar acción del menú
                 menuAction(itemId)
             } else {
                 Toast.makeText(this, R.string.wrong_password, Toast.LENGTH_SHORT).show()
             }
 
-            // close dialog
+            // Cerrar diálogo
             dialog.dismiss()
         }
 
         exitButton.setOnClickListener {
-            // close dialog
+            // Cerrar diálogo
             dialog.dismiss()
         }
 
@@ -308,7 +313,7 @@ class MainActivity : BaseActivity(), ServiceConnection {
 
     fun updateEventTabTitle() {
         Log.d(this, "updateEventTabTitle()")
-        // update event tab title
+        // Actualizar título de la pestaña de eventos
         (viewPager.adapter as ViewPagerFragmentAdapter?)?.notifyDataSetChanged()
     }
 

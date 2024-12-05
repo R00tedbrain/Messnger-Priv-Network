@@ -1,13 +1,16 @@
+// Settings.kt
+
 package d.d.meshenger
 
-import org.json.JSONObject
 import org.json.JSONArray
+import org.json.JSONObject
 import java.util.*
+import java.util.Arrays
 
 class Settings {
     var username = ""
-    var secretKey = byteArrayOf()
-    var publicKey = byteArrayOf()
+    var publicKey: ByteArray = ByteArray(0)
+    var encryptedSecretKey: String = "" // Nueva propiedad para almacenar la clave privada cifrada
     var nightMode = "auto" // on, off, auto
     var speakerphoneMode = "auto" // on, off, auto
     var blockUnknown = false
@@ -37,68 +40,75 @@ class Settings {
     var ignoreOverlayPermission = false
     var addresses = mutableListOf<String>()
 
-    fun getOwnContact(): Contact {
-        return Contact(username, publicKey, addresses)
-    }
+    // Campo para almacenar el contacto propio
+    var ownContact: Contact? = null
 
     fun destroy() {
-        publicKey.fill(0)
-        secretKey.fill(0)
+        Arrays.fill(publicKey, 0.toByte())
     }
 
     companion object {
         fun fromJSON(obj: JSONObject): Settings {
             val s = Settings()
-            s.username = obj.getString("username")
-            s.secretKey = Utils.hexStringToByteArray(obj.getString("secret_key"))
-            s.publicKey = Utils.hexStringToByteArray(obj.getString("public_key"))
-            s.nightMode = obj.getString("night_mode")
-            s.speakerphoneMode = obj.getString("speakerphone_mode")
-            s.blockUnknown = obj.getBoolean("block_unknown")
-            s.useNeighborTable = obj.getBoolean("use_neighbor_table")
-            s.guessEUI64Address = obj.getBoolean("guess_eui64_address")
-            s.videoHardwareAcceleration = obj.getBoolean("video_hardware_acceleration")
-            s.disableAudioProcessing = obj.getBoolean("disable_audio_processing")
-            s.connectTimeout = obj.getInt("connect_timeout")
-            s.disableCallHistory = obj.getBoolean("disable_call_history")
-            s.disableProximitySensor = obj.getBoolean("disable_proximity_sensor")
-            s.promptOutgoingCalls = obj.getBoolean("prompt_outgoing_calls")
-            s.showUsernameAsLogo = obj.getBoolean("show_username_as_logo")
-            s.pushToTalk = obj.getBoolean("push_to_talk")
-            s.startOnBootup = obj.getBoolean("start_on_bootup")
-            s.connectRetries = obj.getInt("connect_retries")
-            s.enableMicrophoneByDefault = obj.getBoolean("enable_microphone_by_default")
-            s.enableCameraByDefault = obj.getBoolean("enable_camera_by_default")
-            s.selectFrontCameraByDefault = obj.getBoolean("select_front_camera_by_default")
-            s.disableCpuOveruseDetection = obj.getBoolean("disable_cpu_overuse_detection")
-            s.autoAcceptCalls = obj.getBoolean("auto_accept_calls")
-            s.menuPassword = obj.getString("menu_password")
-            s.videoDegradationMode = obj.getString("video_degradation_mode")
-            s.cameraResolution = obj.getString("camera_resolution")
-            s.cameraFramerate = obj.getString("camera_framerate")
-            s.automaticStatusUpdates = obj.getBoolean("automatic_status_updates")
-            s.themeName = obj.getString("theme_name")
-            s.ignoreOverlayPermission = obj.getBoolean("ignore_overlay_permission")
+            s.username = obj.optString("username", "")
+            s.publicKey = Utils.hexStringToByteArray(obj.optString("public_key", ""))
+            s.encryptedSecretKey = obj.optString("encrypted_secret_key", "")
+            s.nightMode = obj.optString("night_mode", "auto")
+            s.speakerphoneMode = obj.optString("speakerphone_mode", "auto")
+            s.blockUnknown = obj.optBoolean("block_unknown", false)
+            s.useNeighborTable = obj.optBoolean("use_neighbor_table", false)
+            s.guessEUI64Address = obj.optBoolean("guess_eui64_address", true)
+            s.videoHardwareAcceleration = obj.optBoolean("video_hardware_acceleration", true)
+            s.disableAudioProcessing = obj.optBoolean("disable_audio_processing", false)
+            s.connectTimeout = obj.optInt("connect_timeout", 500)
+            s.disableCallHistory = obj.optBoolean("disable_call_history", false)
+            s.disableProximitySensor = obj.optBoolean("disable_proximity_sensor", false)
+            s.promptOutgoingCalls = obj.optBoolean("prompt_outgoing_calls", false)
+            s.showUsernameAsLogo = obj.optBoolean("show_username_as_logo", true)
+            s.pushToTalk = obj.optBoolean("push_to_talk", false)
+            s.startOnBootup = obj.optBoolean("start_on_bootup", false)
+            s.connectRetries = obj.optInt("connect_retries", 1)
+            s.enableMicrophoneByDefault = obj.optBoolean("enable_microphone_by_default", true)
+            s.enableCameraByDefault = obj.optBoolean("enable_camera_by_default", false)
+            s.selectFrontCameraByDefault = obj.optBoolean("select_front_camera_by_default", true)
+            s.disableCpuOveruseDetection = obj.optBoolean("disable_cpu_overuse_detection", false)
+            s.autoAcceptCalls = obj.optBoolean("auto_accept_calls", false)
+            s.menuPassword = obj.optString("menu_password", "")
+            s.videoDegradationMode = obj.optString("video_degradation_mode", "balanced")
+            s.cameraResolution = obj.optString("camera_resolution", "auto")
+            s.cameraFramerate = obj.optString("camera_framerate", "auto")
+            s.automaticStatusUpdates = obj.optBoolean("automatic_status_updates", true)
+            s.themeName = obj.optString("theme_name", "sky_blue")
+            s.ignoreOverlayPermission = obj.optBoolean("ignore_overlay_permission", false)
 
-            val array = obj.getJSONArray("addresses")
-            val addresses = mutableListOf<String>()
-            for (i in 0 until array.length()) {
-                var address = array[i].toString()
-                if (AddressUtils.isIPAddress(address) || AddressUtils.isDomain(address)) {
-                    address = address.lowercase(Locale.ROOT)
-                } else if (AddressUtils.isMACAddress(address)) {
-                    // wrap MAC address to EUI64 link local address
-                    // for backwards compatibility
-                    address = AddressUtils.getLinkLocalFromMAC(address)!!
-                } else {
-                    Log.d("Settings", "invalid address $address")
-                    continue
-                }
-                if (address !in addresses) {
-                    addresses.add(address)
+            val addressesArray = obj.optJSONArray("addresses")
+            if (addressesArray != null) {
+                for (i in 0 until addressesArray.length()) {
+                    var address = addressesArray.getString(i)
+                    if (AddressUtils.isIPAddress(address) || AddressUtils.isDomain(address)) {
+                        address = address.lowercase(Locale.ROOT)
+                    } else if (AddressUtils.isMACAddress(address)) {
+                        // Convertir dirección MAC a dirección EUI64 de enlace local
+                        val linkLocalAddress = AddressUtils.getLinkLocalFromMAC(address)
+                        if (linkLocalAddress != null) {
+                            address = linkLocalAddress
+                        } else {
+                            continue
+                        }
+                    } else {
+                        Log.d("Settings", "Invalid address $address")
+                        continue
+                    }
+                    if (!s.addresses.contains(address)) {
+                        s.addresses.add(address)
+                    }
                 }
             }
-            s.addresses = addresses.toMutableList()
+
+            // Deserializar el contacto propio si existe
+            if (obj.has("own_contact")) {
+                s.ownContact = Contact.fromJSON(obj.getJSONObject("own_contact"), false)
+            }
 
             return s
         }
@@ -106,8 +116,8 @@ class Settings {
         fun toJSON(s: Settings): JSONObject {
             val obj = JSONObject()
             obj.put("username", s.username)
-            obj.put("secret_key", Utils.byteArrayToHexString(s.secretKey))
             obj.put("public_key", Utils.byteArrayToHexString(s.publicKey))
+            obj.put("encrypted_secret_key", s.encryptedSecretKey)
             obj.put("night_mode", s.nightMode)
             obj.put("speakerphone_mode", s.speakerphoneMode)
             obj.put("block_unknown", s.blockUnknown)
@@ -136,11 +146,16 @@ class Settings {
             obj.put("theme_name", s.themeName)
             obj.put("ignore_overlay_permission", s.ignoreOverlayPermission)
 
-            val addresses = JSONArray()
-            for (i in s.addresses.indices) {
-                addresses.put(s.addresses[i])
+            val addressesArray = JSONArray()
+            for (address in s.addresses) {
+                addressesArray.put(address)
             }
-            obj.put("addresses", addresses)
+            obj.put("addresses", addressesArray)
+
+            // Serializar el contacto propio si existe
+            s.ownContact?.let {
+                obj.put("own_contact", Contact.toJSON(it, false))
+            }
 
             return obj
         }

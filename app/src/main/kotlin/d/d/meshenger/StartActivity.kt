@@ -1,3 +1,5 @@
+// StartActivity.kt
+
 package d.d.meshenger
 
 import android.app.Dialog
@@ -14,8 +16,6 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import d.d.meshenger.MainService.MainBinder
-import org.libsodium.jni.NaCl
-import org.libsodium.jni.Sodium
 import java.util.*
 
 /*
@@ -31,14 +31,14 @@ class StartActivity : BaseActivity(), ServiceConnection {
     override fun onCreate(savedInstanceState: Bundle?) {
         Log.d(this, "onCreate() Meshenger version ${BuildConfig.VERSION_NAME}")
         Log.d(this, "Android SDK: ${Build.VERSION.SDK_INT}, "
-                    + "Release: ${Build.VERSION.RELEASE}, "
-                    + "Brand: ${Build.BRAND}, "
-                    + "Device: ${Build.DEVICE}, "
-                    + "Id: ${Build.ID}, "
-                    + "Hardware: ${Build.HARDWARE}, "
-                    + "Manufacturer: ${Build.MANUFACTURER}, "
-                    + "Model: ${Build.MODEL}, "
-                    + "Product: ${Build.PRODUCT}"
+                + "Release: ${Build.VERSION.RELEASE}, "
+                + "Brand: ${Build.BRAND}, "
+                + "Device: ${Build.DEVICE}, "
+                + "Id: ${Build.ID}, "
+                + "Hardware: ${Build.HARDWARE}, "
+                + "Manufacturer: ${Build.MANUFACTURER}, "
+                + "Model: ${Build.MODEL}, "
+                + "Product: ${Build.PRODUCT}"
         )
 
         // set by BootUpReceiver
@@ -94,23 +94,15 @@ class StartActivity : BaseActivity(), ServiceConnection {
                 }
             }
             4 -> {
-                Log.d(this, "init 4: check key pair")
-                if (binder!!.getSettings().publicKey.isEmpty()) {
-                    // generate key pair
-                    initKeyPair()
-                }
-                continueInit()
-            }
-            5 -> {
-                Log.d(this, "init 5: check addresses")
+                Log.d(this, "init 4: check addresses")
                 if (binder!!.getService().firstStart) {
                     showMissingAddressDialog()
                 } else {
                     continueInit()
                 }
             }
-            6 -> {
-                Log.d(this, "init 6: start MainActivity")
+            5 -> {
+                Log.d(this, "init 5: start MainActivity")
                 val settings = binder!!.getSettings()
 
                 // set in case we just updated the app
@@ -158,17 +150,6 @@ class StartActivity : BaseActivity(), ServiceConnection {
         super.onDestroy()
     }
 
-    private fun initKeyPair() {
-        // create secret/public key pair
-        val publicKey = ByteArray(Sodium.crypto_sign_publickeybytes())
-        val secretKey = ByteArray(Sodium.crypto_sign_secretkeybytes())
-        Sodium.crypto_sign_keypair(publicKey, secretKey)
-        val settings = binder!!.getSettings()
-        settings.publicKey = publicKey
-        settings.secretKey = secretKey
-        binder!!.saveDatabase()
-    }
-
     private fun getDefaultAddress(): AddressEntry? {
         val addresses = AddressUtils.collectAddresses()
 
@@ -199,7 +180,7 @@ class StartActivity : BaseActivity(), ServiceConnection {
             }
             builder.setNegativeButton(R.string.button_skip) { dialog: DialogInterface, _: Int ->
                 dialog.cancel()
-                // continue with out address configuration
+                // continue without address configuration
                 continueInit()
             }
             val adialog = builder.create()
@@ -340,11 +321,6 @@ class StartActivity : BaseActivity(), ServiceConnection {
         this.dialog = ddialog
 
         ddialog.show()
-    }
-
-    companion object {
-        // load libsodium for JNI access
-        private var sodium = NaCl.sodium()
     }
 
     private fun generateRandomUserName(): String {

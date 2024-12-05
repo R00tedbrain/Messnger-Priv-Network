@@ -83,8 +83,23 @@ class QRScanActivity : BaseActivity(), BarcodeCallback, ServiceConnection {
             Toast.makeText(this, R.string.contact_has_no_address_warning, Toast.LENGTH_LONG).show()
         }
 
+        // Validate contact addresses
+        if (!validateContactAddresses(newContact.addresses)) {
+            Toast.makeText(this, R.string.error_address_invalid, Toast.LENGTH_LONG).show()
+            return
+        }
+
         // Mostrar diálogo para ingresar nombre y mostrar la huella digital
         showAddContactDialog(newContact)
+    }
+
+    private fun validateContactAddresses(addresses: List<String>): Boolean {
+        for (address in addresses) {
+            if (!AddressUtils.isIPAddress(address) && !AddressUtils.isDomain(address)) {
+                return false
+            }
+        }
+        return true
     }
 
     private fun showAddContactDialog(contact: Contact) {

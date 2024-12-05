@@ -1,5 +1,3 @@
-// StartActivity.kt
-
 package d.d.meshenger
 
 import android.app.Dialog
